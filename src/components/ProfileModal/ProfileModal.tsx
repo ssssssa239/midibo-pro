@@ -16,10 +16,101 @@ interface Props {
 type TabType = 'basic' | 'keyswitches' | 'splits';
 
 /**
+ * 音域（Pitch）専用入力コンポーネント
+ * - 全削除時は自動で "0" にセット
+ * - "0" の状態から入力された場合、打鍵した数字で 0 を即座に上書き
+ * - 0〜127 の範囲で安全に制御
+ */
+const PitchInput: React.FC<{
+  value: number;
+  min?: number;
+  max?: number;
+  onChange: (val: number) => void;
+}> = ({ value, min = 0, max = 127, onChange }) => {
+  const [text, setText] = useState<string>(String(value));
+  const canOverwriteRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    setText(String(value));
+    canOverwriteRef.current = true;
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value;
+
+    // ★ 全部削除された場合は即座に "0" をセットし、次の打鍵で上書き可能にする
+    if (raw === '') {
+      setText('0');
+      canOverwriteRef.current = true;
+      onChange(0);
+      return;
+    }
+
+    // ★ "0" の状態から入力された場合、0 を上書き
+    if (canOverwriteRef.current && text === '0' && raw.length > 1) {
+      if (raw === '00') {
+        raw = '0';
+      } else {
+        raw = raw.replace('0', '');
+      }
+      canOverwriteRef.current = false;
+    } else {
+      canOverwriteRef.current = false;
+    }
+
+    // 先頭の余計なゼロを除去（"0" 単体は維持）
+    if (raw.length > 1) {
+      raw = raw.replace(/^0+/, '');
+      if (raw === '') raw = '0';
+    }
+
+    const num = parseInt(raw, 10);
+    if (!isNaN(num)) {
+      const clamped = Math.min(max, Math.max(min, num));
+      setText(raw);
+      onChange(clamped);
+    } else {
+      setText(raw);
+    }
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+    canOverwriteRef.current = true;
+  };
+
+  const handleBlur = () => {
+    const num = parseInt(text, 10);
+    const validNum = isNaN(num) ? 0 : Math.min(max, Math.max(min, num));
+    setText(String(validNum));
+    onChange(validNum);
+    canOverwriteRef.current = true;
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={text}
+      onFocus={handleFocus}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      style={{
+        width: 64,
+        background: '#191B2D',
+        border: '1px solid #30354E',
+        borderRadius: 4,
+        color: '#FFF',
+        padding: '4px 6px',
+        fontSize: 12,
+        textAlign: 'center'
+      }}
+    />
+  );
+};
+
+/**
  * リードタイム専用入力コンポーネント
- * - 初期値の未表示バグを解消 (未設定時は 24 を初期表示)
- * - 最大値 9999 対応
- * - "1" の状態から入力した際、1文字目を上書き判定し、以降は通常通り追記入力可能
  */
 const LeadTimeInput: React.FC<{
   value: number | undefined;
@@ -36,24 +127,20 @@ const LeadTimeInput: React.FC<{
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let raw = e.target.value;
 
-    // 空文字（完全に消去）を許容
     if (raw === '') {
       setText('');
       canOverwriteRef.current = false;
       return;
     }
 
-    // ★ "1" の状態かつ上書き可能フラグがある状態で入力された場合
     if (canOverwriteRef.current && text === '1' && raw.length > 1) {
-      // ユーザーが新しく打鍵した1文字を抽出 ("15"なら"5"、"11"なら"1")
       const newChar = raw.replace('1', '');
       raw = newChar !== '' ? newChar[0] : '1';
-      canOverwriteRef.current = false; // 上書き完了 ➔ 以降は通常の追記モードへ
+      canOverwriteRef.current = false;
     } else {
       canOverwriteRef.current = false;
     }
 
-    // 先頭の余分なゼロを除去
     raw = raw.replace(/^0+(?=\d)/, '');
     const num = parseInt(raw, 10);
 
@@ -118,7 +205,7 @@ export const ProfileModal: React.FC<Props> = ({
 }) => {
   const [tempProfile, setTempProfile] = useState<InstrumentProfile>(currentProfile);
   const [activeTab, setActiveTab] = useState<TabType>('basic');
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(false); // 高度な設定トグル (デフォルト: OFF)
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -130,7 +217,6 @@ export const ProfileModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  // JSON書出
   const handleExportJSON = () => {
     const jsonStr = JSON.stringify(tempProfile, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -142,7 +228,6 @@ export const ProfileModal: React.FC<Props> = ({
     URL.revokeObjectURL(url);
   };
 
-  // JSON読込
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -401,7 +486,7 @@ export const ProfileModal: React.FC<Props> = ({
 
         {/* 3. タブコンテンツ */}
         <div style={{ flex: 1, padding: 20, overflowY: 'auto', maxHeight: 420 }}>
-          {/* TAB 1: 基本・音域 */}
+          {/* TAB 1: 基本・音域 (PitchInput による安定入力) */}
           {activeTab === 'basic' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ padding: 16, background: '#10172A', borderRadius: 6, border: '1px solid #30354E' }}>
@@ -416,24 +501,20 @@ export const ProfileModal: React.FC<Props> = ({
                   <div>
                     <span style={{ fontSize: 11, color: '#8FA4C4' }}>最低音 (Min Pitch):</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                      <input
-                        type="number"
-                        min={0}
-                        max={tempProfile.playableRange.maxPitch}
+                      {/* ★ 最低音入力コンポーネント */}
+                      <PitchInput
                         value={tempProfile.playableRange.minPitch}
-                        onFocus={e => e.target.select()}
-                        onChange={e => {
-                          const cleanVal = e.target.value.replace(/^0+(?=\d)/, '');
-                          const num = cleanVal === '' ? 0 : Number(cleanVal);
+                        min={0}
+                        max={127}
+                        onChange={num => {
                           setTempProfile({
                             ...tempProfile,
                             playableRange: {
                               ...tempProfile.playableRange,
-                              minPitch: Math.max(0, Math.min(tempProfile.playableRange.maxPitch, num))
+                              minPitch: num
                             }
                           });
                         }}
-                        style={{ width: 64, background: '#191B2D', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '4px 6px', fontSize: 12 }}
                       />
                       <span style={{ fontSize: 14, fontWeight: 'bold', color: '#00D2D3' }}>
                         {pitchToNoteName(tempProfile.playableRange.minPitch)}
@@ -444,24 +525,20 @@ export const ProfileModal: React.FC<Props> = ({
                   <div>
                     <span style={{ fontSize: 11, color: '#8FA4C4' }}>最高音 (Max Pitch):</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                      <input
-                        type="number"
-                        min={tempProfile.playableRange.minPitch}
-                        max={127}
+                      {/* ★ 最高音入力コンポーネント */}
+                      <PitchInput
                         value={tempProfile.playableRange.maxPitch}
-                        onFocus={e => e.target.select()}
-                        onChange={e => {
-                          const cleanVal = e.target.value.replace(/^0+(?=\d)/, '');
-                          const num = cleanVal === '' ? 0 : Number(cleanVal);
+                        min={0}
+                        max={127}
+                        onChange={num => {
                           setTempProfile({
                             ...tempProfile,
                             playableRange: {
                               ...tempProfile.playableRange,
-                              maxPitch: Math.max(tempProfile.playableRange.minPitch, Math.min(127, num))
+                              maxPitch: num
                             }
                           });
                         }}
-                        style={{ width: 64, background: '#191B2D', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '4px 6px', fontSize: 12 }}
                       />
                       <span style={{ fontSize: 14, fontWeight: 'bold', color: '#FF4757' }}>
                         {pitchToNoteName(tempProfile.playableRange.maxPitch)}
@@ -476,7 +553,6 @@ export const ProfileModal: React.FC<Props> = ({
           {/* TAB 2: キースイッチ */}
           {activeTab === 'keyswitches' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* 高度な設定チェックボックス */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#8FA4C4', cursor: 'pointer', userSelect: 'none' }}>
                   <input
@@ -489,13 +565,12 @@ export const ProfileModal: React.FC<Props> = ({
                 </label>
               </div>
 
-              {/* ★ 高度な設定がONのときに表示される説明パネル */}
               {showAdvanced && (
                 <div
                   style={{
                     padding: '8px 12px',
-                    background: '#070710',
-                    border: '1px solid #7c86b7',
+                    background: '#10172A',
+                    border: '1px solid #30354E',
                     borderRadius: 6,
                     fontSize: 11,
                     lineHeight: 1.5,
@@ -506,13 +581,13 @@ export const ProfileModal: React.FC<Props> = ({
                   }}
                 >
                   <div>
-                    <strong style={{ color: '#8de8ff' }}>リード（リードタイム）:</strong> 音が鳴る何 ticks 前にキースイッチを先行送信（予約）するかを設定します（480 ticks = 1拍）。
+                    <strong style={{ color: '#A4D3FF' }}>リード（リードタイム）:</strong> 音が鳴る何 ticks 前にキースイッチを先行送信（予約）するかを設定します（480 ticks = 1拍）。
                   </div>
                   <div>
-                    <strong style={{ color: '#83b7ff' }}>ラッチ型:</strong> 次の指示まで奏法を維持します。次の通常音の直前に通常復帰（Normal: 1）が自動予約されます。
+                    <strong style={{ color: '#00D2D3' }}>ラッチ型:</strong> 次の指示まで奏法を維持します。次の通常音の直前（演奏ノートの途中）に通常復帰（Normal: 1）が自動予約されます。
                   </div>
                   <div>
-                    <strong style={{ color: '#9598ff' }}>ワンショット型:</strong> その音のみに奏法を適用します。マイコン側で自動復帰するため、通常復帰キーは送信されません。
+                    <strong style={{ color: '#FFA500' }}>ワンショット型:</strong> その音のみに奏法を適用します。マイコン側で自動復帰するため、通常復帰キーは送信されません。
                   </div>
                 </div>
               )}
@@ -544,7 +619,6 @@ export const ProfileModal: React.FC<Props> = ({
                     {ks.standardType}
                   </span>
                   
-                  {/* 名前入力ボックス */}
                   <input
                     type="text"
                     value={ks.customName}
@@ -552,10 +626,8 @@ export const ProfileModal: React.FC<Props> = ({
                     style={{ flex: 1, minWidth: 80, background: '#3D4764', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '4px 8px', fontSize: 11 }}
                   />
 
-                  {/* ★★★ 「高度な設定」がONのときだけ、リードタイム入力と方式ドロップダウンが出現 ★★★ */}
                   {showAdvanced && (
                     <>
-                      {/* リードタイム設定 (常時数値表示 ＆ "1"上書き対応) */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, color: '#8FA4C4' }}>リード:</span>
                         <LeadTimeInput
@@ -565,14 +637,13 @@ export const ProfileModal: React.FC<Props> = ({
                         <span style={{ fontSize: 10, color: '#8FA4C4' }}>tk</span>
                       </div>
 
-                      {/* 方式ドロップダウン */}
                       <select
                         value={ks.mode ?? 'latch'}
                         disabled={ks.note === 1}
                         onChange={e => handleUpdateKeySwitch(ks.note, { mode: e.target.value as 'latch' | 'oneshot' })}
                         style={{
                           background: '#191B2D',
-                          color: (ks.mode ?? 'latch') === 'latch' ? '#83b7ff' : '#9598ff',
+                          color: (ks.mode ?? 'latch') === 'latch' ? '#00D2D3' : '#FFA500',
                           border: '1px solid #30354E',
                           borderRadius: 4,
                           padding: '3px 6px',
