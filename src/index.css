@@ -1,0 +1,31 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0D111A;
+  /* ★ トラックパッドの左右スワイプによる「戻る・進む」を完全に無効化 */
+  overscroll-behavior-x: none;
+  overscroll-behavior: none;
+}
+
+/* スクロールバーのカスタマイズ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1E202C;
+}
+::-webkit-scrollbar-thumb {
+  background: #72829F;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #72829F;
+}
