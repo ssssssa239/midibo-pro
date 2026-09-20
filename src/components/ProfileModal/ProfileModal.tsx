@@ -16,75 +16,70 @@ interface Props {
 type TabType = 'basic' | 'keyswitches' | 'splits';
 
 /**
- * 音域（Pitch）専用入力コンポーネント
- * - 全削除時は自動で "0" にセット
- * - "0" の状態から入力された場合、打鍵した数字で 0 を即座に上書き
- * - 0〜127 の範囲で安全に制御
+ * 汎用数値入力コンポーネント (Commit-on-Blur 方式)
+ * - 入力中は一切の制限を設けず、全削除や自由な編集が可能
+ * - 入力決定時（フォーカスが外れる / Enter押下）に空白・NaN・範囲外なら「入力前の数値」に自動ロールバック
+ * - Escapeキーでキャンセル
  */
-const PitchInput: React.FC<{
+interface NumberInputProps {
   value: number;
   min?: number;
   max?: number;
   onChange: (val: number) => void;
-}> = ({ value, min = 0, max = 127, onChange }) => {
-  const [text, setText] = useState<string>(String(value));
-  const canOverwriteRef = useRef<boolean>(true);
+  style?: React.CSSProperties;
+}
 
+const NumberInput: React.FC<NumberInputProps> = ({
+  value,
+  min = 0,
+  max = 9999,
+  onChange,
+  style
+}) => {
+  const [text, setText] = useState<string>(String(value));
+  const prevValueRef = useRef<number>(value);
+
+  // 親の値が変わった際に同期
   useEffect(() => {
     setText(String(value));
-    canOverwriteRef.current = true;
+    prevValueRef.current = value;
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let raw = e.target.value;
-
-    // ★ 全部削除された場合は即座に "0" をセットし、次の打鍵で上書き可能にする
-    if (raw === '') {
-      setText('0');
-      canOverwriteRef.current = true;
-      onChange(0);
-      return;
-    }
-
-    // ★ "0" の状態から入力された場合、0 を上書き
-    if (canOverwriteRef.current && text === '0' && raw.length > 1) {
-      if (raw === '00') {
-        raw = '0';
-      } else {
-        raw = raw.replace('0', '');
-      }
-      canOverwriteRef.current = false;
-    } else {
-      canOverwriteRef.current = false;
-    }
-
-    // 先頭の余計なゼロを除去（"0" 単体は維持）
-    if (raw.length > 1) {
-      raw = raw.replace(/^0+/, '');
-      if (raw === '') raw = '0';
-    }
-
-    const num = parseInt(raw, 10);
-    if (!isNaN(num)) {
-      const clamped = Math.min(max, Math.max(min, num));
-      setText(raw);
-      onChange(clamped);
-    } else {
-      setText(raw);
-    }
-  };
-
+  // フォーカス開始時: 直前の値を保持し、全選択
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    prevValueRef.current = value;
     e.target.select();
-    canOverwriteRef.current = true;
   };
 
-  const handleBlur = () => {
-    const num = parseInt(text, 10);
-    const validNum = isNaN(num) ? 0 : Math.min(max, Math.max(min, num));
-    setText(String(validNum));
-    onChange(validNum);
-    canOverwriteRef.current = true;
+  // 入力中: 制限を一切設けずユーザーの入力をそのまま表示
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText(e.target.value);
+  };
+
+  // 入力決定処理 (Blur / Enter)
+  const handleCommit = () => {
+    const trimmed = text.trim();
+    const num = parseInt(trimmed, 10);
+
+    // 空白、NaN、または最小・最大範囲外なら「入力前の数値」へ戻す
+    if (trimmed === '' || isNaN(num) || num < min || num > max) {
+      setText(String(prevValueRef.current));
+      onChange(prevValueRef.current);
+    } else {
+      setText(String(num));
+      onChange(num);
+      prevValueRef.current = num;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleCommit();
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setText(String(prevValueRef.current));
+      (e.target as HTMLInputElement).blur();
+    }
   };
 
   return (
@@ -94,100 +89,17 @@ const PitchInput: React.FC<{
       value={text}
       onFocus={handleFocus}
       onChange={handleChange}
-      onBlur={handleBlur}
+      onBlur={handleCommit}
+      onKeyDown={handleKeyDown}
       style={{
-        width: 64,
         background: '#191B2D',
         border: '1px solid #30354E',
         borderRadius: 4,
         color: '#FFF',
-        padding: '4px 6px',
-        fontSize: 12,
-        textAlign: 'center'
-      }}
-    />
-  );
-};
-
-/**
- * リードタイム専用入力コンポーネント
- */
-const LeadTimeInput: React.FC<{
-  value: number | undefined;
-  onChange: (val: number) => void;
-}> = ({ value, onChange }) => {
-  const [text, setText] = useState<string>(String(value ?? 24));
-  const canOverwriteRef = useRef<boolean>(true);
-
-  useEffect(() => {
-    setText(String(value ?? 24));
-    canOverwriteRef.current = true;
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let raw = e.target.value;
-
-    if (raw === '') {
-      setText('');
-      canOverwriteRef.current = false;
-      return;
-    }
-
-    if (canOverwriteRef.current && text === '1' && raw.length > 1) {
-      const newChar = raw.replace('1', '');
-      raw = newChar !== '' ? newChar[0] : '1';
-      canOverwriteRef.current = false;
-    } else {
-      canOverwriteRef.current = false;
-    }
-
-    raw = raw.replace(/^0+(?=\d)/, '');
-    const num = parseInt(raw, 10);
-
-    if (!isNaN(num)) {
-      const clamped = Math.min(9999, Math.max(1, num));
-      setText(String(clamped));
-      onChange(clamped);
-    } else {
-      setText(raw);
-    }
-  };
-
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.target.select();
-    canOverwriteRef.current = true;
-  };
-
-  const handleBlur = () => {
-    const num = parseInt(text, 10);
-    if (isNaN(num) || num < 1) {
-      setText('24');
-      onChange(24);
-    } else {
-      const clamped = Math.min(9999, Math.max(1, num));
-      setText(String(clamped));
-      onChange(clamped);
-    }
-    canOverwriteRef.current = true;
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={text}
-      onFocus={handleFocus}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      style={{
-        width: 52,
-        background: '#191B2D',
-        border: '1px solid #30354E',
-        borderRadius: 4,
-        color: '#FFF',
-        padding: '3px 4px',
         fontSize: 11,
-        textAlign: 'center'
+        textAlign: 'center',
+        outline: 'none',
+        ...style
       }}
     />
   );
@@ -486,7 +398,7 @@ export const ProfileModal: React.FC<Props> = ({
 
         {/* 3. タブコンテンツ */}
         <div style={{ flex: 1, padding: 20, overflowY: 'auto', maxHeight: 420 }}>
-          {/* TAB 1: 基本・音域 (PitchInput による安定入力) */}
+          {/* TAB 1: 基本・音域 */}
           {activeTab === 'basic' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ padding: 16, background: '#10172A', borderRadius: 6, border: '1px solid #30354E' }}>
@@ -501,8 +413,8 @@ export const ProfileModal: React.FC<Props> = ({
                   <div>
                     <span style={{ fontSize: 11, color: '#8FA4C4' }}>最低音 (Min Pitch):</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                      {/* ★ 最低音入力コンポーネント */}
-                      <PitchInput
+                      {/* 最低音 (0〜127) */}
+                      <NumberInput
                         value={tempProfile.playableRange.minPitch}
                         min={0}
                         max={127}
@@ -515,6 +427,7 @@ export const ProfileModal: React.FC<Props> = ({
                             }
                           });
                         }}
+                        style={{ width: 64, padding: '4px 6px', fontSize: 12 }}
                       />
                       <span style={{ fontSize: 14, fontWeight: 'bold', color: '#00D2D3' }}>
                         {pitchToNoteName(tempProfile.playableRange.minPitch)}
@@ -525,8 +438,8 @@ export const ProfileModal: React.FC<Props> = ({
                   <div>
                     <span style={{ fontSize: 11, color: '#8FA4C4' }}>最高音 (Max Pitch):</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                      {/* ★ 最高音入力コンポーネント */}
-                      <PitchInput
+                      {/* 最高音 (0〜127) */}
+                      <NumberInput
                         value={tempProfile.playableRange.maxPitch}
                         min={0}
                         max={127}
@@ -539,6 +452,7 @@ export const ProfileModal: React.FC<Props> = ({
                             }
                           });
                         }}
+                        style={{ width: 64, padding: '4px 6px', fontSize: 12 }}
                       />
                       <span style={{ fontSize: 14, fontWeight: 'bold', color: '#FF4757' }}>
                         {pitchToNoteName(tempProfile.playableRange.maxPitch)}
@@ -630,9 +544,13 @@ export const ProfileModal: React.FC<Props> = ({
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, color: '#8FA4C4' }}>リード:</span>
-                        <LeadTimeInput
-                          value={ks.leadTimeTicks}
+                        {/* リードタイム (1〜9999) */}
+                        <NumberInput
+                          value={ks.leadTimeTicks ?? 24}
+                          min={1}
+                          max={9999}
                           onChange={val => handleUpdateKeySwitch(ks.note, { leadTimeTicks: val })}
+                          style={{ width: 52, padding: '3px 4px' }}
                         />
                         <span style={{ fontSize: 10, color: '#8FA4C4' }}>tk</span>
                       </div>
@@ -704,23 +622,25 @@ export const ProfileModal: React.FC<Props> = ({
                         style={{ width: 90, background: '#10172A', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '3px 6px', fontSize: 11 }}
                       />
                       <span style={{ fontSize: 11, color: '#8FA4C4' }}>範囲:</span>
-                      <input
-                        type="number"
+                      
+                      {/* 分割ルールの最低音 */}
+                      <NumberInput
+                        value={rule.minPitch}
                         min={0}
                         max={rule.maxPitch}
-                        value={rule.minPitch}
-                        onChange={e => handleUpdateSplitRule(rule.id, { minPitch: Number(e.target.value) })}
-                        style={{ width: 44, background: '#10172A', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: 2, fontSize: 11 }}
+                        onChange={val => handleUpdateSplitRule(rule.id, { minPitch: val })}
+                        style={{ width: 44, padding: '2px 4px' }}
                       />
                       <span style={{ fontSize: 11, color: '#A4D3FF' }}>{pitchToNoteName(rule.minPitch)}</span>
                       <span>〜</span>
-                      <input
-                        type="number"
+
+                      {/* 分割ルールの最高音 */}
+                      <NumberInput
+                        value={rule.maxPitch}
                         min={rule.minPitch}
                         max={127}
-                        value={rule.maxPitch}
-                        onChange={e => handleUpdateSplitRule(rule.id, { maxPitch: Number(e.target.value) })}
-                        style={{ width: 44, background: '#10172A', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: 2, fontSize: 11 }}
+                        onChange={val => handleUpdateSplitRule(rule.id, { maxPitch: val })}
+                        style={{ width: 44, padding: '2px 4px' }}
                       />
                       <span style={{ fontSize: 11, color: '#A4D3FF' }}>{pitchToNoteName(rule.maxPitch)}</span>
 
