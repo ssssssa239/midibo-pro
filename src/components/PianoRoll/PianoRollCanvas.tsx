@@ -315,16 +315,26 @@ export const PianoRollCanvas: React.FC<Props> = ({
 
       if (hasSpecialArt && !isOutOfRange) {
         const borderColor = ARTICULATION_BORDER_COLORS[art] || '#FFFFFF';
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 1.8;
+
+        // ① 下地：内側と外側をくっきり分ける暗いセパレーター (太さ 4px)
+        ctx.strokeStyle = '#0E111A'; // または 'rgba(0, 0, 0, 0.75)'
+        ctx.lineWidth = 4;
         ctx.stroke();
 
+        // ② 本体：鮮やかな奏法カラー (太さ 2px)
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-        // 奏法名ラベル (枠線色と合わせて表示)
+        // 掴み用リサイズバー
+        //ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        //ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
+
+        // 奏法名ラベル
         const ksConfig = keySwitches.find(k => k.note === art);
         const shouldShowLabel = !note.isRangeArt || rangeStartNoteIds.has(note.id);
         if (ksConfig && noteW > 24 && shouldShowLabel) {
-          ctx.fillStyle = borderColor;
+          ctx.fillStyle = '#fcfcfc'; // ★ 黒色で固定化
           ctx.font = 'bold 10px sans-serif';
           const label = (ksConfig.customName || '').split(' ')[0];
           ctx.fillText(label, noteX + 4, noteY + 12, noteW - 12);
@@ -332,7 +342,7 @@ export const PianoRollCanvas: React.FC<Props> = ({
       } else {
         // 通常奏法時: 枠線なし (リサイズバーのみ控えめに描画)
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
+        //ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
       }
     }
 
