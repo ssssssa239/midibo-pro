@@ -4,8 +4,6 @@ import { InstrumentProfile } from '../../types/midiboProfile';
 
 interface Props {
   activeTool: EditorTool;
-  isRangeMode: boolean; // ★ 範囲モードフラグ
-  onToggleBrush: () => void; // ★ ブラシボタンクリック（選択 / 単音 ⇔ 範囲切替）
   onSelectTool: (tool: EditorTool) => void;
   profile: InstrumentProfile;
   activeKeySwitch: number;
@@ -17,8 +15,6 @@ interface Props {
 
 export const EditorToolbar: React.FC<Props> = ({
   activeTool,
-  isRangeMode,
-  onToggleBrush,
   onSelectTool,
   profile,
   activeKeySwitch,
@@ -73,28 +69,17 @@ export const EditorToolbar: React.FC<Props> = ({
         >
           ⌫
         </button>
-        {/* ★ 奏法ブラシボタン (オレンジ: 単音 / シアン: 範囲モード) */}
+        {/* ★ 奏法ブラシボタン（1本化・選択時はアクセントオレンジ） */}
         <button
-          onClick={onToggleBrush}
-          title={
-            activeTool !== 'brush'
-              ? '奏法ブラシ (数字 1〜9, 0)'
-              : isRangeMode
-              ? '奏法ブラシ [範囲選択モード] (クリックで単音モードへ戻る)'
-              : '奏法ブラシ [単音モード] (クリックで範囲選択モードへ)'
-          }
+          onClick={() => onSelectTool('brush')}
+          title="奏法ブラシ (数字 1〜9, 0)"
           style={{
             padding: '3px 10px',
             fontSize: 14,
             border: 'none',
             borderRadius: 3,
             cursor: 'pointer',
-            background:
-              activeTool === 'brush'
-                ? isRangeMode
-                  ? '#60f1bc'
-                  : '#fabc49'
-                : '#455571',
+            background: activeTool === 'brush' ? '#fabc49' : '#455571',
             color: activeTool === 'brush' ? '#1E202C' : '#E2EFFF',
             lineHeight: 1,
             transition: 'background 0.15s ease'

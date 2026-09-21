@@ -193,8 +193,8 @@ export const KeySwitchLane: React.FC<Props> = ({
       ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
+      //ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      //ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
 
       if (ksConfig && noteW > 28) {
         ctx.fillStyle = '#1E202C';

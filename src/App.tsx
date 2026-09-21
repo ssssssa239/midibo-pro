@@ -308,8 +308,6 @@ export const App: React.FC = () => {
             <>
               <EditorToolbar
                 activeTool={activeTool}
-                isRangeMode={isRangeMode}
-                onToggleBrush={handleToggleBrush}
                 onSelectTool={setActiveTool}
                 profile={currentTrack.profile}
                 activeKeySwitch={activeKeySwitch}
@@ -323,12 +321,11 @@ export const App: React.FC = () => {
                   <PianoRollCanvas
                     track={currentTrack}
                     activeTool={activeTool}
-                    isRangeMode={isRangeMode}
                     activeKeySwitch={activeKeySwitch}
                     zoomLevel={zoomLevel}
                     onZoomChange={setZoomLevel}
                     onNotesChange={handleUpdateNotes}
-                    onRecordHistory={handleRecordHistory} // ★ 追加
+                    onRecordHistory={handleRecordHistory}
                     onScrollXChange={setPianoRollScrollX}
                   />
                 </div>

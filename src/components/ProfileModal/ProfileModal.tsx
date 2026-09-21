@@ -222,8 +222,7 @@ export const ProfileModal: React.FC<Props> = ({
       name: `Part ${tempProfile.pitchSplitRules.length + 1}`,
       minPitch: tempProfile.playableRange.minPitch,
       maxPitch: tempProfile.playableRange.maxPitch,
-      outputChannel: tempProfile.pitchSplitRules.length,
-      color: '#54A0FF'
+      outputChannel: tempProfile.pitchSplitRules.length
     };
     setTempProfile(prev => ({
       ...prev,
@@ -581,6 +580,7 @@ export const ProfileModal: React.FC<Props> = ({
           )}
 
           {/* TAB 3: 音域分割 */}
+          {/* TAB 3: 音域分割 */}
           {activeTab === 'splits' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -609,17 +609,12 @@ export const ProfileModal: React.FC<Props> = ({
                       key={rule.id}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#191B2D', borderRadius: 4, border: '1px solid #30354E' }}
                     >
-                      <input
-                        type="color"
-                        value={rule.color}
-                        onChange={e => handleUpdateSplitRule(rule.id, { color: e.target.value })}
-                        style={{ width: 22, height: 22, border: 'none', background: 'transparent', cursor: 'pointer' }}
-                      />
+                      {/* ★ input[type="color"] は削除 */}
                       <input
                         type="text"
                         value={rule.name}
                         onChange={e => handleUpdateSplitRule(rule.id, { name: e.target.value })}
-                        style={{ width: 90, background: '#10172A', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '3px 6px', fontSize: 11 }}
+                        style={{ width: 100, background: '#10172A', border: '1px solid #30354E', borderRadius: 4, color: '#FFF', padding: '3px 6px', fontSize: 11 }}
                       />
                       <span style={{ fontSize: 11, color: '#8FA4C4' }}>範囲:</span>
                       

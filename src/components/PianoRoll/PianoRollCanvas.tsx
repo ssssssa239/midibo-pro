@@ -2,16 +2,17 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { EditorTrack, EditorNote, EditorTool } from '../../types/editor';
 import { pitchToNoteName, isBlackKey } from '../../utils/pitchHelper';
 import { syncAutoKeySwitches } from '../../utils/keySwitchSync';
+import { CHANNEL_INNER_COLORS, ARTICULATION_BORDER_COLORS } from '../../constants/colorPalettes';
 
 interface Props {
   track: EditorTrack | null;
   activeTool: EditorTool;
-  isRangeMode: boolean;
+  /* isRangeMode は削除 */
   activeKeySwitch: number;
   zoomLevel: number;
   onZoomChange: (zoom: number) => void;
   onNotesChange: (notes: EditorNote[]) => void;
-  onRecordHistory?: (snapshotBeforeChange: EditorNote[]) => void; // ★ 履歴保存用
+  onRecordHistory?: (snapshotBeforeChange: EditorNote[]) => void;
   ticksPerBeat?: number;
   onScrollXChange?: (scrollX: number) => void;
 }
@@ -42,12 +43,12 @@ function drawRoundedRect(
 export const PianoRollCanvas: React.FC<Props> = ({
   track,
   activeTool,
-  isRangeMode,
+  /* isRangeMode は削除 */
   activeKeySwitch,
   zoomLevel,
   onZoomChange,
   onNotesChange,
-  onRecordHistory, // ★ 分割代入で確実に受け取り
+  onRecordHistory,
   ticksPerBeat = 480,
   onScrollXChange
 }) => {
@@ -272,6 +273,7 @@ export const PianoRollCanvas: React.FC<Props> = ({
       }
     }
 
+    // ノーツ描画ループ (250行目付近)
     for (const note of notes) {
       if (note.pitch <= 10) continue;
 
@@ -285,22 +287,21 @@ export const PianoRollCanvas: React.FC<Props> = ({
 
       const isOutOfRange = note.pitch < minPitch || note.pitch > maxPitch;
 
-      let baseColor = '#54A0FF';
+      // ★ 1. チャンネル番号の決定 (音域分割ルールを考慮)
+      let effectiveChannel = note.channel ?? track.channel ?? 0;
       if (isPitchSplitEnabled) {
         const matchedRule = pitchSplitRules.find(
           r => note.pitch >= r.minPitch && note.pitch <= r.maxPitch
         );
-        if (matchedRule) baseColor = matchedRule.color;
+        if (matchedRule) {
+          effectiveChannel = matchedRule.outputChannel;
+        }
       }
 
-      const ksConfig = keySwitches.find(k => k.note === note.articulationNote);
-      const isSpecial = note.articulationNote > 1 && !!ksConfig;
-
-      let fillCol = baseColor;
+      // ★ 2. 内側の色 (Ch 1〜16 の彩度・明度控えめカラー)
+      let fillCol = CHANNEL_INNER_COLORS[Math.max(0, effectiveChannel) % 16];
       if (isOutOfRange) {
-        fillCol = '#515c6c';
-      } else if (isSpecial && ksConfig) {
-        fillCol = ksConfig.badgeColor;
+        fillCol = '#2D3340'; // 音域外は暗いスレートグレーでマスク
       }
 
       ctx.fillStyle = fillCol;
@@ -308,24 +309,30 @@ export const PianoRollCanvas: React.FC<Props> = ({
       drawRoundedRect(ctx, noteX, noteY + 1, noteW, noteH, 3);
       ctx.fill();
 
-      ctx.strokeStyle = isOutOfRange
-        ? 'rgba(255, 255, 255, 0.2)'
-        : isSpecial
-        ? '#FFFFFF'
-        : 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = isSpecial && !isOutOfRange ? 1.5 : 1;
-      ctx.stroke();
+      // ★ 3. 枠線の色 (奏法適用時のみ。通常奏法は枠線なし)
+      const art = note.articulationNote ?? 1;
+      const hasSpecialArt = art > 1;
 
-      ctx.fillStyle = isOutOfRange ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.25)';
-      ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
+      if (hasSpecialArt && !isOutOfRange) {
+        const borderColor = ARTICULATION_BORDER_COLORS[art] || '#FFFFFF';
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
 
-      const shouldShowLabel = !note.isRangeArt || rangeStartNoteIds.has(note.id);
 
-      if (isSpecial && ksConfig && noteW > 24 && shouldShowLabel) {
-        ctx.fillStyle = isOutOfRange ? '#94A3B8' : '#1E202C';
-        ctx.font = 'bold 10px sans-serif';
-        const label = (ksConfig.customName || '').split(' ')[0];
-        ctx.fillText(label, noteX + 4, noteY + 12, noteW - 12);
+        // 奏法名ラベル (枠線色と合わせて表示)
+        const ksConfig = keySwitches.find(k => k.note === art);
+        const shouldShowLabel = !note.isRangeArt || rangeStartNoteIds.has(note.id);
+        if (ksConfig && noteW > 24 && shouldShowLabel) {
+          ctx.fillStyle = borderColor;
+          ctx.font = 'bold 10px sans-serif';
+          const label = (ksConfig.customName || '').split(' ')[0];
+          ctx.fillText(label, noteX + 4, noteY + 12, noteW - 12);
+        }
+      } else {
+        // 通常奏法時: 枠線なし (リサイズバーのみ控えめに描画)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(noteX + noteW - 3, noteY + 2, 2, noteH - 2);
       }
     }
 
@@ -482,14 +489,21 @@ export const PianoRollCanvas: React.FC<Props> = ({
       }
 
       // 奏法ブラシツール
+      // 2. 奏法ブラシツール: 奏法の方式（ラッチ/ワンショット）に応じて自動判定
       if (activeTool === 'brush') {
         const newArt = activeKeySwitch;
+
+        // ★ 付与する奏法がラッチ型かどうかを判定
+        const targetKs = track.profile?.keySwitches.find(k => k.note === newArt);
+        const isLatch = (targetKs?.mode ?? 'latch') === 'latch';
+
         const updatedNotes = notes.map(n => {
           if (n.id === hitNote.id) {
             return {
               ...n,
               articulationNote: newArt,
-              isRangeArt: newArt > 1 ? isRangeMode : false
+              // ★ ラッチ型なら自動で範囲選択モード(isRangeArt: true)を適用
+              isRangeArt: newArt > 1 ? isLatch : false
             };
           }
           return n;

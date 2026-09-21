@@ -18,8 +18,8 @@ export interface KeySwitchConfig {
   customName: string;
   isEnabled: boolean;
   badgeColor: string;
-  leadTimeTicks?: number; // ★ 個別先行リードタイム (ticks, デフォルト: 24)
-  mode?: KeySwitchMode;   // ★ 個別方式 ('latch' | 'oneshot', デフォルト: 'latch')
+  leadTimeTicks?: number;
+  mode?: KeySwitchMode;
 }
 
 export interface PitchSplitRule {
@@ -28,7 +28,7 @@ export interface PitchSplitRule {
   minPitch: number;
   maxPitch: number;
   outputChannel: number;
-  color: string;
+  // ★ color を削除
 }
 
 export interface InstrumentProfile {
