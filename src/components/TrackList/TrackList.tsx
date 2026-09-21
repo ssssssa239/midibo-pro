@@ -85,7 +85,7 @@ export const TrackList: React.FC<Props> = ({
               color: '#FFF',
               border: 'none',
               borderRadius: 4,
-              cursor: tracks.length === 0 ? 'not-allowed' : 'pointer'
+              cursor: 'pointer', // ★ 常に pointer を指定
             }}
           >
             + MIDI追加
@@ -102,7 +102,7 @@ export const TrackList: React.FC<Props> = ({
               color: tracks.length === 0 ? '#4E5568' : '#FFF',
               border: 'none',
               borderRadius: 4,
-              cursor: tracks.length === 0 ? 'not-allowed' : 'pointer'
+              cursor: tracks.length === 0 ? 'not-allowed' : 'pointer', // エクスポート側のみ維持
             }}
           >
             MIDIエクスポート
